@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: springboot-batch
+  datasource:
+    url: jdbc:mysql://47.101.154.99:3306/test
+    username: root
+    password: 76516051t
+  batch:
+    # 数据库模式初始化模式
+    initializer: true
+    #在启动时执行上下文中的所有Spring Batch作业
+    enabled: true
+    #  初始化数据库表
+    initialize-schema: always
+#    job:
+#      names: parentJob
