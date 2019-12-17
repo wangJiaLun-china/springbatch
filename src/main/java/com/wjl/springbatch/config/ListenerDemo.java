@@ -21,8 +21,8 @@ import java.util.List;
  * @author wangJiaLun
  * @date 2019-12-11
  **/
-@Configuration
-@EnableBatchProcessing
+//@Configuration
+//@EnableBatchProcessing
 public class ListenerDemo {
 
     /**
