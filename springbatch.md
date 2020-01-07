@@ -36,7 +36,7 @@
 - 多种启动作业的方式
   - 可以使用Web应用程序，Java程序，命令行等来启动Spring Batch作业。
 
-### 环境搭建
+## 环境搭建
 
 - pom.xml配置
 
@@ -162,7 +162,7 @@ step[Step] --- iterWriter[Item Writer]
   ​
 
 
-## Job
+### Job
 
 - 介绍：
 
@@ -262,7 +262,7 @@ step[Step] --- iterWriter[Item Writer]
 
     ```
 
-## Flow
+### Flow
 
 - 介绍：
 
@@ -371,7 +371,7 @@ step[Step] --- iterWriter[Item Writer]
 
     ```
 
-## Split 并发执行
+### Split 并发执行
 
 - 介绍：实现任务中多个step或多个flow并发执行
 
@@ -479,7 +479,7 @@ step[Step] --- iterWriter[Item Writer]
   }
   ```
 
-## 决策器
+### 决策器
 
 - 接口：JobExecutionDecider
 
@@ -594,7 +594,7 @@ step[Step] --- iterWriter[Item Writer]
   }
   ```
 
-## Job 嵌套
+### Job 嵌套
 
 -  介绍：一个Job可以嵌套在另一个Job中，被嵌套的Job被称为子Job,外部Job称为父Job，子Job不能单独执行，		  需要父Job来启动
 
@@ -823,7 +823,7 @@ step[Step] --- iterWriter[Item Writer]
   }
   ```
 
-## 监听器
+### 监听器
 
 - 介绍：
 
@@ -969,8 +969,705 @@ step[Step] --- iterWriter[Item Writer]
   }
   ```
 
-## Job 参数
+### Job 参数
 
 - 介绍： 在Job运行时 可以通过key=value形式传参
 
-  ​
+  ```java
+  package com.wjl.springbatch.config;
+
+  import org.springframework.batch.core.*;
+  import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
+  import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
+  import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
+  import org.springframework.batch.core.scope.context.ChunkContext;
+  import org.springframework.batch.core.step.tasklet.Tasklet;
+  import org.springframework.batch.repeat.RepeatStatus;
+  import org.springframework.beans.factory.annotation.Autowired;
+  import org.springframework.context.annotation.Bean;
+  import org.springframework.context.annotation.Configuration;
+
+  import java.util.Map;
+
+  /**
+   * @author wangJiaLun
+   * @date 2019-12-11
+   **/
+  @Configuration
+  @EnableBatchProcessing
+  public class ParametersDemo implements StepExecutionListener {
+
+      /**
+       *  注入创建任务对象的对象
+       */
+      @Autowired
+      private JobBuilderFactory jobBuilderFactory;
+
+      /**
+       *  注入创建Step对象的对象
+       */
+      @Autowired
+      private StepBuilderFactory stepBuilderFactory;
+
+      /**
+       *  参数存储
+       */
+      private Map<String, JobParameter> parameterMap;
+
+      @Bean
+      public Job parameterJob(){
+          return jobBuilderFactory.get("parameterJob")
+                  .start(parameterStep())
+                  .build();
+      }
+
+      /**
+       *  Job 执行的是step, Job使用的数据肯定是在step中使用的
+       *  所以只需要给step传递数据
+       *  使用step级别的监听来传递数据
+       * @return
+       */
+      @Bean
+      public Step parameterStep() {
+          return stepBuilderFactory.get("parameterStep")
+                  .listener(this)
+                  .tasklet(new Tasklet() {
+                      @Override
+                      public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
+                          // 输出接收到的参数值
+                          System.out.println(parameterMap.get("info"));
+                          return RepeatStatus.FINISHED;
+                      }
+                  })
+                  .build();
+      }
+
+      @Override
+      public void beforeStep(StepExecution stepExecution) {
+          parameterMap = stepExecution.getJobParameters().getParameters();
+      }
+
+      @Override
+      public ExitStatus afterStep(StepExecution stepExecution) {
+          return null;
+      }
+  }
+  ```
+
+  在idea启动配置里面Program arguments 传参 ``` info=wjl ```
+
+### IterReader 数据输入
+
+#### 简单实现
+
+```java
+package com.wjl.springbatch.itemreader;
+
+import org.springframework.batch.core.Job;
+import org.springframework.batch.core.Step;
+import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
+import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
+import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.Arrays;
+import java.util.List;
+
+/**
+ * @author wangJiaLun
+ * @date 2019-12-16
+ **/
+@Configuration
+@EnableBatchProcessing
+public class ItemReaderDemo {
+
+    /**
+     *  注入创建任务对象的对象
+     */
+    @Autowired
+    private JobBuilderFactory jobBuilderFactory;
+
+    /**
+     *  注入创建Step对象的对象
+     */
+    @Autowired
+    private StepBuilderFactory stepBuilderFactory;
+
+    @Bean
+    public Job itemReaderDemoJob(){
+        return jobBuilderFactory.get("itemReaderDemoJob")
+                .start(itemReaderDemoStep())
+                .build();
+    }
+
+    @Bean
+    public Step itemReaderDemoStep() {
+        return stepBuilderFactory.get("itemReaderDemoStep")
+                .<String, String>chunk(2)
+                .reader(itemReaderDemoRead())
+                .writer(list ->{
+                    for (String item : list) {
+                        System.out.println(item + "...");
+                    }
+                })
+                .build();
+    }
+
+    @Bean
+    public MyReader itemReaderDemoRead() {
+        List<String> data = Arrays.asList("cat", "dog", "pig", "duck");
+        return new MyReader(data);
+    }
+}
+```
+
+```java
+package com.wjl.springbatch.itemreader;
+
+import org.springframework.batch.item.ItemReader;
+import org.springframework.batch.item.NonTransientResourceException;
+import org.springframework.batch.item.ParseException;
+import org.springframework.batch.item.UnexpectedInputException;
+
+import java.util.Iterator;
+import java.util.List;
+
+/**
+ * @author wangJiaLun
+ * @date 2019-12-16
+ **/
+public class MyReader implements ItemReader<String> {
+
+    private Iterator<String> iterator;
+
+    public MyReader(List<String> list) {
+        this.iterator = list.iterator();
+    }
+
+    @Override
+    public String read() throws Exception, UnexpectedInputException, ParseException, NonTransientResourceException {
+        // 数据一个一个数据读
+        if (iterator.hasNext()) {
+            return this.iterator.next();
+        }
+        return null;
+    }
+}
+```
+
+#### 从数据库中读取
+
+JdbcPagingItemReader 分页读取
+
+```java
+package com.wjl.springbatch.itemreaderdb;
+
+import org.springframework.batch.core.Job;
+import org.springframework.batch.core.Step;
+import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
+import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
+import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
+import org.springframework.batch.core.configuration.annotation.StepScope;
+import org.springframework.batch.item.ItemWriter;
+import org.springframework.batch.item.database.JdbcPagingItemReader;
+import org.springframework.batch.item.database.Order;
+import org.springframework.batch.item.database.support.MySqlPagingQueryProvider;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.RowMapper;
+
+import javax.sql.DataSource;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * @author wangJiaLun
+ * @date 2019-12-16
+ **/
+@Configuration
+@EnableBatchProcessing
+public class ItemReaderDbDemo {
+
+    /**
+     *  注入创建任务对象的对象
+     */
+    @Autowired
+    private JobBuilderFactory jobBuilderFactory;
+
+    /**
+     *  注入创建Step对象的对象
+     */
+    @Autowired
+    private StepBuilderFactory stepBuilderFactory;
+
+    @Autowired
+    private DataSource dataSource;
+
+    @Autowired
+    @Qualifier("dbJdbcWriter")
+    private ItemWriter<AccessDemo> dbJdbcWriter;
+
+    @Bean
+    public Job itemReaderDbJob(){
+        return jobBuilderFactory.get("itemReaderDbJob")
+                .start(itemReaderDbStep())
+                .build();
+    }
+
+    @Bean
+    public Step itemReaderDbStep() {
+        return stepBuilderFactory.get("itemReaderDbStep")
+                .<AccessDemo, AccessDemo>chunk(10)
+                .reader(dbJdbcReader())
+                .writer(dbJdbcWriter)
+                .build();
+    }
+
+    @Bean
+    @StepScope
+    public JdbcPagingItemReader<AccessDemo> dbJdbcReader() {
+        JdbcPagingItemReader<AccessDemo> reader = new JdbcPagingItemReader<>();
+        reader.setDataSource(dataSource);
+        reader.setFetchSize(10);
+        // 把读取到的记录转换成AccessDemo对象
+        reader.setRowMapper(new RowMapper<AccessDemo>() {
+            @Override
+            public AccessDemo mapRow(ResultSet resultSet, int rows) throws SQLException {
+                AccessDemo accessDemo = new AccessDemo();
+                accessDemo.setId(resultSet.getInt(1));
+                accessDemo.setUsername(resultSet.getString(2));
+                accessDemo.setShopName(resultSet.getString(3));
+                return accessDemo;
+            }
+        });
+        // 指定sql语句
+        MySqlPagingQueryProvider provider = new MySqlPagingQueryProvider();
+        provider.setSelectClause("id, username, shop_name");
+        provider.setFromClause("from access");
+        // 指定根据哪个字段排序
+        Map<String, Order> sort = new HashMap<>(1);
+        sort.put("id", Order.ASCENDING);
+        provider.setSortKeys(sort);
+        reader.setQueryProvider(provider);
+        return reader;
+    }
+}
+```
+
+#### 从普通文件中读取数据
+
+FlatFileItemReader 普通文件数据读取
+
+```java
+package com.wjl.springbatch.itemreaderfile;
+
+import com.wjl.springbatch.model.AccessDemo;
+import org.springframework.batch.core.Job;
+import org.springframework.batch.core.Step;
+import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
+import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
+import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
+import org.springframework.batch.core.configuration.annotation.StepScope;
+import org.springframework.batch.item.ItemWriter;
+import org.springframework.batch.item.file.FlatFileItemReader;
+import org.springframework.batch.item.file.mapping.DefaultLineMapper;
+import org.springframework.batch.item.file.mapping.FieldSetMapper;
+import org.springframework.batch.item.file.transform.DelimitedLineTokenizer;
+import org.springframework.batch.item.file.transform.FieldSet;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.validation.BindException;
+
+/**
+ * @author wangJiaLun
+ * @date 2019-12-16
+ **/
+@Configuration
+@EnableBatchProcessing
+public class ItemReaderFileDemo {
+
+    /**
+     *  注入创建任务对象的对象
+     */
+    @Autowired
+    private JobBuilderFactory jobBuilderFactory;
+
+    /**
+     *  注入创建Step对象的对象
+     */
+    @Autowired
+    private StepBuilderFactory stepBuilderFactory;
+
+    @Autowired
+    @Qualifier("flatFileWriter")
+    private ItemWriter<AccessDemo> flatFileWriter;
+
+    @Bean
+    public Job  fileItemReaderDemoJob(){
+        return jobBuilderFactory.get("fileItemReaderDemoJob")
+                .start(fileItemReaderDemoStep())
+                .build();
+    }
+
+    @Bean
+    public Step fileItemReaderDemoStep() {
+        return stepBuilderFactory.get("fileItemReaderDemoStep")
+                .<AccessDemo, AccessDemo>chunk(2)
+                .reader(flatFileReader())
+                .writer(flatFileWriter)
+                .build();
+    }
+
+    @Bean
+    @StepScope
+    public FlatFileItemReader<AccessDemo> flatFileReader() {
+        FlatFileItemReader<AccessDemo> reader = new FlatFileItemReader<>();
+        reader.setResource(new ClassPathResource("/metadata/accessdemo.txt"));
+        // 跳过第1行
+        reader.setLinesToSkip(1);
+        // 解析数据
+        DelimitedLineTokenizer tokenizer = new DelimitedLineTokenizer();
+        tokenizer.setNames(new String[]{"id", "username"});
+        // 解析出来的数据单行映射为对象
+        DefaultLineMapper<AccessDemo> demoDefaultLineMapper = new DefaultLineMapper<>();
+        demoDefaultLineMapper.setLineTokenizer(tokenizer);
+        demoDefaultLineMapper.setFieldSetMapper(new FieldSetMapper<AccessDemo>() {
+            @Override
+            public AccessDemo mapFieldSet(FieldSet fieldSet) throws BindException {
+                AccessDemo accessDemo = new AccessDemo();
+                accessDemo.setId(fieldSet.readInt("id"));
+                accessDemo.setUsername(fieldSet.readString("username"));
+                return accessDemo;
+            }
+        });
+        demoDefaultLineMapper.afterPropertiesSet();
+        reader.setLineMapper(demoDefaultLineMapper);
+        return reader;
+    }
+}
+```
+
+#### 从XML文件中获取数据
+
+StaxEventItemReader
+
+所需pom依赖
+
+```xml
+<dependency>
+    <groupId>org.springframework</groupId>
+    <artifactId>spring-oxm</artifactId>
+</dependency>
+<dependency>
+    <groupId>com.thoughtworks.xstream</groupId>
+    <artifactId>xstream</artifactId>
+    <version>1.4.7</version>
+</dependency>
+```
+
+```java
+package com.wjl.springbatch.itemreaderxml;
+
+import com.wjl.springbatch.model.AccessDemo;
+import org.springframework.batch.core.Job;
+import org.springframework.batch.core.Step;
+import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
+import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
+import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
+import org.springframework.batch.core.configuration.annotation.StepScope;
+import org.springframework.batch.item.ItemWriter;
+import org.springframework.batch.item.xml.StaxEventItemReader;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.oxm.xstream.XStreamMarshaller;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * @author wangJiaLun
+ * @date 2019-12-17
+ **/
+@Configuration
+@EnableBatchProcessing
+public class ItemReaderXmlDemo {
+
+    /**
+     *  注入创建任务对象的对象
+     */
+    @Autowired
+    private JobBuilderFactory jobBuilderFactory;
+
+    /**
+     *  注入创建Step对象的对象
+     */
+    @Autowired
+    private StepBuilderFactory stepBuilderFactory;
+
+    @Autowired
+    @Qualifier("xmlFileWriter")
+    private ItemWriter<AccessDemo> xmlFileWriter;
+
+    @Bean
+    public Job xmlItemReaderDemoJob(){
+        return jobBuilderFactory.get("xmlItemReaderDemoJob")
+                .start(xmlItemReaderDemoStep())
+                .build();
+    }
+
+    @Bean
+    public Step xmlItemReaderDemoStep() {
+        return stepBuilderFactory.get("xmlItemReaderDemoStep")
+                .<AccessDemo, AccessDemo>chunk(2)
+                .reader(xmlFileReader())
+                .writer(xmlFileWriter)
+                .build();
+    }
+
+    @Bean
+    @StepScope
+    public StaxEventItemReader<? extends AccessDemo> xmlFileReader() {
+        StaxEventItemReader<AccessDemo> reader = new StaxEventItemReader<>();
+        reader.setResource(new ClassPathResource("/metadata/accessdemo.xml"));
+        // 指定需要处理的根标签
+        reader.setFragmentRootElementName("accessdemo");
+        // 把xml转成对象
+        XStreamMarshaller unmarshaller = new XStreamMarshaller();
+        Map<String, Class> map = new HashMap<>(16);
+        map.put("accessdemo", AccessDemo.class);
+        unmarshaller.setAliases(map);
+        reader.setUnmarshaller(unmarshaller);
+        return reader;
+    }
+}
+```
+
+#### 从多个文件中读取数据
+
+MultiResourceItemReader
+
+```java
+package com.wjl.springbatch.itemreadermulti;
+
+import com.wjl.springbatch.model.AccessDemo;
+import org.springframework.batch.core.Job;
+import org.springframework.batch.core.Step;
+import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
+import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
+import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
+import org.springframework.batch.core.configuration.annotation.StepScope;
+import org.springframework.batch.item.file.FlatFileItemReader;
+import org.springframework.batch.item.file.MultiResourceItemReader;
+import org.springframework.batch.item.file.mapping.DefaultLineMapper;
+import org.springframework.batch.item.file.mapping.FieldSetMapper;
+import org.springframework.batch.item.file.transform.DelimitedLineTokenizer;
+import org.springframework.batch.item.file.transform.FieldSet;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.Resource;
+import org.springframework.validation.BindException;
+
+/**
+ * @author wangJiaLun
+ * @date 2019-12-17
+ **/
+@Configuration
+@EnableBatchProcessing
+public class ItemReaderMultiDemo {
+
+    /**
+     *  注入创建任务对象的对象
+     */
+    @Autowired
+    private JobBuilderFactory jobBuilderFactory;
+
+    /**
+     *  注入创建Step对象的对象
+     */
+    @Autowired
+    private StepBuilderFactory stepBuilderFactory;
+
+    @Value("classpath:/metadata/accessdemo*.txt")
+    private Resource[] fileResources;
+
+    @Autowired
+    @Qualifier("multiFileWriter")
+    private MultiFileWriter multiFileWriter;
+
+    @Bean
+    public Job multiItemReaderDemoJob(){
+        return jobBuilderFactory.get("multiItemReaderDemoJob")
+                .start(multiItemReaderDemoStep())
+                .build();
+    }
+
+    @Bean
+    public Step multiItemReaderDemoStep() {
+        return stepBuilderFactory.get("multiItemReaderDemoStep")
+                .<AccessDemo, AccessDemo>chunk(2)
+                .reader(multiFileReader())
+                .writer(multiFileWriter)
+                .build();
+    }
+
+    @Bean
+    @StepScope
+    public MultiResourceItemReader<? extends AccessDemo> multiFileReader() {
+        MultiResourceItemReader<AccessDemo> reader = new MultiResourceItemReader<>();
+        reader.setDelegate(flatFileReader());
+        reader.setResources(fileResources);
+        return reader;
+    }
+
+    @Bean
+    @StepScope
+    public FlatFileItemReader<AccessDemo> flatFileReader() {
+        FlatFileItemReader<AccessDemo> reader = new FlatFileItemReader<>();
+        // 跳过第1行
+        reader.setLinesToSkip(1);
+        // 解析数据
+        DelimitedLineTokenizer tokenizer = new DelimitedLineTokenizer();
+        tokenizer.setNames("id", "username");
+        // 解析出来的数据单行映射为对象
+        DefaultLineMapper<AccessDemo> demoDefaultLineMapper = new DefaultLineMapper<>();
+        demoDefaultLineMapper.setLineTokenizer(tokenizer);
+        demoDefaultLineMapper.setFieldSetMapper(new FieldSetMapper<AccessDemo>() {
+            @Override
+            public AccessDemo mapFieldSet(FieldSet fieldSet) throws BindException {
+                AccessDemo accessDemo = new AccessDemo();
+                accessDemo.setId(fieldSet.readInt("id"));
+                accessDemo.setUsername(fieldSet.readString("username"));
+                return accessDemo;
+            }
+        });
+        demoDefaultLineMapper.afterPropertiesSet();
+        reader.setLineMapper(demoDefaultLineMapper);
+        return reader;
+    }
+}
+```
+
+#### ItemReader异常处理及重启
+
+实现 ItemStreamReader 接口
+
+```java
+package com.wjl.springbatch.restart;
+
+import org.springframework.batch.item.*;
+
+import java.util.Iterator;
+import java.util.List;
+
+/**
+ * @author wangJiaLun
+ * @date 2019-12-16
+ **/
+public class MyRestartReader implements ItemStreamReader<String> {
+
+    private Iterator<String> iterator;
+
+    public MyRestartReader(List<String> list) {
+        this.iterator = list.iterator();
+    }
+
+    @Override
+    public String read() throws Exception, UnexpectedInputException, ParseException, NonTransientResourceException {
+        // 数据一个一个数据读
+        if (iterator.hasNext()) {
+            return this.iterator.next();
+        }
+        return null;
+    }
+
+    /**
+     *   step 执行前处理
+     * @param executionContext
+     * @throws ItemStreamException
+     */
+    @Override
+    public void open(ExecutionContext executionContext) throws ItemStreamException {
+        System.out.println("open...");
+    }
+
+    /**
+     *  chunk 处理完一批数据后触发
+     * @param executionContext
+     * @throws ItemStreamException
+     */
+    @Override
+    public void update(ExecutionContext executionContext) throws ItemStreamException {
+        System.out.println("update...");
+    }
+
+    /**
+     *   step 执行完之后触发
+     * @throws ItemStreamException
+     */
+    @Override
+    public void close() throws ItemStreamException {
+        System.out.println("close...");
+    }
+}
+```
+
+#### ItemWriter 
+
+itemReader 是一个数据一个数据读,ItemWriter 是一批一批输出
+
+```java
+package com.wjl.springbatch.itemwriter;
+
+import org.springframework.batch.item.ItemWriter;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+
+/**
+ * @author wangJiaLun
+ * @date 2019-12-19
+ **/
+@Component("itemWriterDemo")
+public class ItemWriterDemo implements ItemWriter<String> {
+
+    @Override
+    public void write(List<? extends String> items) throws Exception {
+        System.out.println(items.size());
+        for (String item : items) {
+            System.out.println(item);
+        }
+    }
+}
+```
+
+#### Itemwriter 输出到数据库
+
+Neo4jItemWriter 
+
+MongoItemWriter 
+
+RepositoryItemWriter
+
+HibernateItemWriter
+
+JdbcBatchItemWriter
+
+JpaItemWriter
+
+GemfireItemWriter
+
