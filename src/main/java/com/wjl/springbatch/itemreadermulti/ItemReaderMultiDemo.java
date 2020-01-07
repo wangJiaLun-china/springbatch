@@ -25,8 +25,8 @@ import org.springframework.validation.BindException;
  * @author wangJiaLun
  * @date 2019-12-17
  **/
-@Configuration
-@EnableBatchProcessing
+//@Configuration
+//@EnableBatchProcessing
 public class ItemReaderMultiDemo {
 
     /**

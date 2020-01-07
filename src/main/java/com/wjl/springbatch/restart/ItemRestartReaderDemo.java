@@ -17,8 +17,8 @@ import java.util.List;
  * @author wangJiaLun
  * @date 2019-12-16
  **/
-@Configuration
-@EnableBatchProcessing
+//@Configuration
+//@EnableBatchProcessing
 public class ItemRestartReaderDemo {
 
     /**

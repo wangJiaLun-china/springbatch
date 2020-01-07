@@ -5,7 +5,9 @@ import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
+import org.springframework.batch.item.ItemWriter;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -32,6 +34,10 @@ public class ItemReaderDemo {
     @Autowired
     private StepBuilderFactory stepBuilderFactory;
 
+    @Autowired
+    @Qualifier("itemWriterDemo")
+    private ItemWriter itemWriterDemo;
+
     @Bean
     public Job itemReaderDemoJob(){
         return jobBuilderFactory.get("itemReaderDemoJob")
@@ -44,11 +50,7 @@ public class ItemReaderDemo {
         return stepBuilderFactory.get("itemReaderDemoStep")
                 .<String, String>chunk(2)
                 .reader(itemReaderDemoRead())
-                .writer(list ->{
-                    for (String item : list) {
-                        System.out.println(item + "...");
-                    }
-                })
+                .writer(itemWriterDemo)
                 .build();
     }
 
